@@ -1,0 +1,121 @@
+#include <QTRSensors.h>
+
+// Crear objeto para sensor analógico QTR-8A
+QTRSensors qtr;
+
+// Pines del sensor QTR-8A (A0 a A7)
+const uint8_t sensorPins[] = {A0, A1, A2, A3, A4, A5, A6, A7};
+
+// Pines del driver MX1508
+const int IN4 = 3;  // PWM Motor izquierdo
+const int IN3 = 5;
+const int IN2 = 6;  // PWM Motor derecho
+const int IN1 = 9;
+
+// LED del Arduino (pin 13)
+const int LED = 13;
+
+// Velocidad base
+const int VELOCIDAD = 70;
+
+// Arreglo para lecturas calibradas
+uint16_t sensores[8];
+
+void setup() {
+  pinMode(LED, OUTPUT);
+
+  // Pines del driver como salidas
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+
+  // Apagar motores al inicio
+  analogWrite(IN4, 0);
+  analogWrite(IN2, 0);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN3, LOW);
+
+  // Inicializar sensor QTR
+  qtr.setTypeAnalog();
+  qtr.setSensorPins(sensorPins, 8);
+  qtr.setSamplesPerSensor(4);
+  // qtr.setEmitterPin(2); // Descomentar si usas emisores controlables
+
+  // LED parpadea lento (espera de 5 segundos)
+  for (int i = 0; i < 5; i++) {
+    digitalWrite(LED, HIGH);
+    delay(500);
+    digitalWrite(LED, LOW);
+    delay(500);
+  }
+
+  // Calibración: parpadeo rápido
+  for (uint16_t i = 0; i < 400; i++) {
+    digitalWrite(LED, HIGH);
+    delay(2);
+    digitalWrite(LED, LOW);
+    delay(3);
+    qtr.calibrate();
+  }
+
+  // LED encendido al finalizar calibración
+  digitalWrite(LED, HIGH);
+  delay(2000);
+  digitalWrite(LED, LOW);
+}
+
+void loop() {
+  // Leer todos los sensores calibrados
+  qtr.readCalibrated(sensores);
+
+  // Detección en sensores centrales (D4 y D5 = sensores[3] y sensores[4])
+  bool centro = (sensores[3] > 500 || sensores[4] > 500);
+
+  // Detectar desvío a izquierda (sensores 0, 1, 2)
+  bool izquierda = (sensores[0] > 500 || sensores[1] > 500 || sensores[2] > 500);
+
+  // Detectar desvío a derecha (sensores 5, 6, 7)
+  bool derecha = (sensores[5] > 500 || sensores[6] > 500 || sensores[7] > 500);
+
+  if (centro) {
+    avanzar();
+  } else if (izquierda) {
+    girarIzquierda();
+  } else if (derecha) {
+    girarDerecha();
+  } else {
+    detenerMotores();  // Si no detecta nada
+  }
+}
+
+// Funciones de movimiento
+
+void avanzar() {
+  digitalWrite(IN3, LOW);
+  analogWrite(IN4, VELOCIDAD);
+
+  digitalWrite(IN1, LOW);
+  analogWrite(IN2, VELOCIDAD);
+}
+
+void girarIzquierda() {
+  digitalWrite(IN3, LOW);
+  analogWrite(IN4, VELOCIDAD / 3);  // Izquierdo más lento
+
+  digitalWrite(IN1, LOW);
+  analogWrite(IN2, VELOCIDAD);      // Derecho normal
+}
+
+void girarDerecha() {
+  digitalWrite(IN3, LOW);
+  analogWrite(IN4, VELOCIDAD);      // Izquierdo normal
+
+  digitalWrite(IN1, LOW);
+  analogWrite(IN2, VELOCIDAD / 3);  // Derecho más lento
+}
+
+void detenerMotores() {
+  analogWrite(IN4, 0);
+  analogWrite(IN2, 0);
+}
